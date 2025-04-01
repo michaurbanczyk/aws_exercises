@@ -1,0 +1,64 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  lambda-python-consumer
+
+  Sample SAM Template for lambda-python-consumer
+
+
+Parameters:
+  KinesisStreamName:
+    Type: String
+
+Resources:
+  KinesisOrdersStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      Name: !Ref KinesisStreamName
+      ShardCount: 2
+
+  OrdersConsumerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: orders_consumer/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Timeout: 30
+      MemorySize: 256
+      Events:
+        StreamRecordsBatch:
+          Type: Kinesis
+          Properties:
+            Stream: !GetAtt KinesisOrdersStream.Arn
+            BatchSize: 20
+            MaximumBatchingWindowInSeconds: 45
+            StartingPosition: TRIM_HORIZON
+            MaximumRetryAttempts: 3
+            Enabled: true
+            BisectBatchOnFunctionError: true
+
+  OrdersEfoConsumerMapping:
+    Type: AWS::Kinesis::StreamConsumer
+    Properties:
+      StreamARN: !GetAtt KinesisOrdersStream.Arn
+      ConsumerName: orders-efo-consumer
+
+  OrdersEfoConsumerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: orders_efoconsumer/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Timeout: 30
+      MemorySize: 256
+      Events:
+        StreamRecordsBatch:
+          Type: Kinesis
+          Properties:
+            Stream: !GetAtt OrdersEfoConsumerMapping.ConsumerARN
+            BatchSize: 20
+            MaximumBatchingWindowInSeconds: 45
+            StartingPosition: LATEST
+            MaximumRetryAttempts: 3
+            Enabled: true
+            BisectBatchOnFunctionError: true
